@@ -1,0 +1,308 @@
+Protocol used by xtris, xtserv and xtbot
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The server listens to a TCP port and keeps an internal list of clients
+as well as some state information.  Each client connects to the server,
+identifies itself, gets some information back, and waits for the
+beginning of a game.  Clients stay connected until they quit, not just
+until the end of a game.
+
+Any commands that affect all connected users (such as a user clicking on
+the 'start game' button, changing the game speed, pausing the game, etc)
+are sent to the server first, which relays them to all clients including
+the one that sent it.  Only then should the client take the command into
+account.
+
+Each client manages its local game, and sends information about it
+(squares to draw or clear, lines to clear or grow, etc) to the server,
+which broadcasts it to all other connected clients.  The server and
+clients trust each other with the timing as well as with the choice of
+pieces.  
+
+A client leaves the game simply by closing the connection;  the server
+will deal with this even in the middle of a game, and will pass the
+information to the remaining clients.
+
+Each client is assigned a number (starting at 1) by the server, and
+informed of this number upon connection.  Afterwards, all protocol
+commands sent by the server to clients include the number of the client
+from which the command originated, or 0 if it originated from the
+server itself (such as when the server restarts a game).
+
+
+Each protocol command is a binary packet made of:
+
+. command length in bytes, not counting this field
+  (4-byte long in network order, always < 256)
+. originator's number (char)
+. opcode (char)
+. arguments, if any
+
+
+Clients must ignore any opcode that they don't understand.
+
+In protocol commands from the client to the server, the originator's
+number is ignored.
+
+In protocol commands from the server to the client, the originator's
+number if set to 0 if the command originates from the server itself,
+and to the number of a client if the command refers to or comes from
+one specific client.
+
+
+Opcode list:
+
+. OP_NICK = 1		(char n[])
+
+Sent by clients upon connection, as well as when the user changes
+nicknames.  A client gets fully registered and its existence propagated
+to all other clients when it sends its first OP_NICK.
+
+Sent by the server to all other clients when a user changes its
+nickname, or declares its first nickname.
+
+The argument is a string of chars, and is not null-terminated.
+
+
+. OP_PLAY = 2		(no arguments)
+
+Sent by the client when the user requests a new game, without taking any
+other action.
+
+Sent by the server to all clients when one of the clients requested it,
+or when everyone (save one player) lost.  When a client gets this
+command, it must drop any current game and start a new one (using an
+OP_CLEAR to clear the board).
+
+
+. OP_FALL = 3		(char l[])
+
+Sent by the client to inform other clients that it has completed some
+lines.  The arguments are the line numbers, from low to high (i.e from
+the top to the bottom of the pit!).
+
+Sent by the server to all clients except the one originating the command.
+It's up the each client to make lines flash before clearing them, when
+they receive an OP_FALL.
+
+
+. OP_DRAW = 4		(char x, char y, char color, ...)
+
+Sent by the client to give update information about its own screen.  The
+arguments are any number of triplets (x, y, color), where x and y are
+pit positions (from 0 to 9, 0 to 19 respectively) and color is the color
+number (from 0 to 8 respectively, with 7 meaning an empty position).
+
+Clients MUST use OP_GROW, OP_FALL and OP_CLEAR whenever they grow a line,
+fall a line or clear the screen; they should not do these with a long
+string of OP_DRAWs.
+
+Sent by the server to all clients except the one originating the command.
+
+
+. OP_LOST = 5		(no arguments)
+
+Sent by the client when it has lost.
+
+Sent by the server to all clients but the originator to inform them that
+the originator has lost.
+
+It's up to each client to draw a curtain on a user's pit when the user
+has lost.
+
+
+. OP_GONE = 6		(no arguments)
+
+Sent by the server to inform all clients that a given client has
+disconnected.
+
+
+. OP_CLEAR = 7		(no arguments)
+
+Sent by the client to the server to inform all other clients that it's
+clearing the pit.
+
+Sent by the server to all clients except the one the command came from.
+
+
+. OP_NEW = 8		(unsigned short n)
+
+Sent by the server to all clients to introduce a new player.  This is
+the only server command in which the originator number is not one of a
+previously introduced client or 0.
+
+A newly connected client gets a string of OP_NEWs (and OP_NICKs) to
+inform it of all previously connected clients.
+
+The parameter is optional: clients must be able to understand the
+command with or without it; if it is not sent, clients must understand
+it to be 0.  The parameter specifies the number of games that the client
+has already won, and is sent as a 16-bit short in network order.
+
+Clients should not check or depend on the argument list being limited to
+2 bytes; this command may be extended to pass additional information
+about clients.
+
+
+. OP_LINES = 9		(char n)
+
+Sent by the client after doing n lines.  This is used by the server to
+re-distribute lines to the client's victim, so clients must NOT send
+this command when they do only one line in normal mode.  Also, this is
+the actual number of lines made, not the number of lines by which the
+victim's screen will grow.
+
+Sent by the server to a client when the originator sends n lines to the
+client.  It's up to the client to translate this into the number of
+lines by which the screen will grow (or a square), partially fill these
+lines, and send the corresponding update codes back (OP_GROW, OP_DRAW).
+
+
+. OP_GROW = 10		(no arguments)
+
+Sent by the client to inform other clients that it's inserting a new
+empty line at the bottom of the pit.  Usually followed by OP_DRAW
+commands to partially fill the line.
+
+Sent by the server to all clients except the one originating the command.
+
+
+. OP_MODE = 11		(char m)
+
+Sent by the client when the user requests a mode change; m is 0 for
+normal mode and 1 for fun mode.
+
+Sent by the server to all clients when a user requests it, and also to
+each new connecting client if the current mode is not 0.  Clients must
+change the mode when they get this command from the server, but not when
+they send it.
+
+
+. OP_LEVEL = 12		(char l)
+
+Sent by the client when the user requests a level change; l is the
+level, between 0 and 9.
+
+Sent by the server to all clients when a user requests it, and also to
+each new connecting client if the current level is not 5.  Clients must
+change the level when they get this command from the server, but not when
+they send it.  They must default to level 5 on startup.
+
+
+. OP_BOT = 13		(no arguments)
+
+Sent by the client immediately after connecting, to declare itself as
+a bot.
+
+
+. OP_KILL = 14		(char n)
+
+Sent by a client, requesting to kill the client n.  Ignored by the
+server if the given client is not a bot.
+
+
+. OP_PAUSE = 15		(no arguments)
+
+Sent by the client when the user requests a pause.
+
+Sent by the server to all clients when a user requests it.  Clients must
+pause the game when they get this command from the server, but not when
+they send it.
+
+
+. OP_CONT = 16		(no arguments)
+
+Sent by the client when the user requests to continue a paused game.
+
+Sent by the server to all clients when a user requests it.  Clients must
+continue the game when they get this command from the server, but not
+when they send it.
+
+
+. OP_VERSION = 17	(char a, char b, char c)
+
+Sent by the client upon connection.  The server compares the version
+numbers to its own, and if they are incompatible sends an OP_BADVERS
+back and drops the client.
+
+The rule for matching version numbers is that the first two (major
+version, minor version) must be equal, while the third (revision) can be
+arbitrary.  Future versions of the protocol will increment the revision
+number if they stay compatible, and one of the version numbers if not.
+
+
+. OP_BADVERS = 18	(char a, char b, char c)
+
+Sent by the server to a client when the protocol version numbers do not
+match; the arguments are the server's version.  The client gets its
+connection closed just after this, so it's reasonable for the client to
+just print an error message and exit.
+
+
+. OP_MSG = 19		(char msg[])
+
+Sent by the client to send a text message (typed by the user) to all
+other clients.  
+
+Sent by the server to all clients except the originator.
+
+
+. OP_YOUARE = 20	(char n)
+
+Sent by the server to the client at the beginning of the connection to
+inform it of its own number.
+
+
+. OP_LINESTO = 21	(char n, char to)
+
+Sent by the server to inform all clients except 'to' that the originator
+is sending n lines to 'to'.
+
+
+. OP_WON = 22		(no arguments)
+
+Sent by the server when it considers that the client has 'won' a game,
+i.e when the client has lost but was the last one playing, or when the
+client is the only one left playing and the server is about to
+auto-restart a new game.  Clients that keep track of the number of games
+each user won use this to increase the counters.
+
+
+. OP_ZERO = 23		(no arguments)
+
+Sent by the client when the user requests to reset the game counters.
+The client must not reset the counters until it gets the same command
+back from the server.
+
+Sent by the server to all clients when a user has requested to reset the
+game counters.
+
+
+
+A typical sequence of commands would be:
+
+(initialization, in just about any order)
+server->client:	OP_YOUARE
+client->server:	OP_NICK
+server->client: a number of OP_NEWs, OP_NICKs, and possibly an OP_LEVEL and
+		an OP_MODE
+client->server: OP_BOT (if the client is a bot)
+client->server: OP_VERSION
+
+(the client is not yet playing)
+client->server & server->client: any number of OP_LEVEL, OP_NICK, OP_KILL,
+				 OP_PLAY, ...  and other commands that
+				 do not require that the client is
+				 already playing
+
+(the game starts)
+server->client:	OP_PLAY
+
+(the client is playing)
+(in just about any order)
+server->client & client->server: any number of general mode commands
+client->server: OP_DRAW, OP_CLEAR, OP_GROW, etc.. commands
+[ ... ]
+client->server: OP_LOST
+
+

@@ -1,0 +1,81 @@
+Version 0.9 : 13 Oct 1996
+
+Put the thing together in 3 nights of hacking...  now waiting for bug
+reports.
+
+Version 1.00 : 16 Oct 1996
+
+Fixed a bunch of bugs, added the whole messagearea thing + the
+resources. 
+
+Version 1.01 : 2 Nov 1996
+
+Added the arrow keys to move the brick around, and a key to drop one
+step down.  Fixed a glitch in the README.
+
+Version 1.10 : 8 Nov 1996
+
+Made the server auto-speedup the game, and added -nospeedup to toggle it
+off.  Added -norestart and -nospeedup to xtris (just passes them to the
+server).  Added a counter for the lines in the current game, and for the
+number of games the player has won, as well as a button, key and X
+resource to reset the games counter.  Increased the size of all buffers
+in xtris from 1k to 4k after some overflow errors were reported.  Made
+the bot modular so it the decision algorithm can be modified on its own
+easily, and replaced it with a much better version.  Added a -test mode
+for the bot that just tests how good the automatic player is.  Clicking
+on the Next zone toggles displaying the next brick.  Rewrote the docs
+about the client/server protocol. 
+
+Version 1.0.1 of the client/server protocol : 8 Nov 1996
+
+Added the optional argument to OP_NEW, and the commands OP_ZERO and
+OP_WON.  This is mostly compatible with the old protocol, except that
+with new clients and an old (1.0.0) server the game counters will never
+increase.
+
+Version 1.11 : 9 Nov 1996
+
+Added -daemon to xtserv.
+
+Version 1.12 : 9 Nov 1996
+
+Bugfix in the automatic increasing of levels (could coredump xtris).
+
+Version 1.13 : 10 Nov 1996
+
+Cosmetic fix in the text entry areas.  Bugfix in the growing of lines
+that would cause the display to be incorrectly updated on other players'
+screens.  Added more buffering in xtris and xtbot to group write()s to
+the server.
+
+Version 1.14 : 29 Mar 1997
+
+Added the -n command-line option to specify the nick, and the "name"
+resource.  Changed a few variable names which conflicted with BSD 4.4
+systems like FreeBSD.
+
+Version 1.15 : 14 Dec 1997
+
+Bugfix in the window resize code; resizes didn't work with mwm or CDE.
+
+
+Version 1.16 (win32): 2004-05-24
+
+Ported to win32. When started on non-standard port, both xtbot and
+xtserv are started on same port. (Xtserv can only be started if you
+try to start xtris on IP 127.0.0.1).
+
+
+Version 1.17 (win32): 2004-05-25
+
+Colors were inversed from original version. Sometimes there were problems with
+screen repainting.
+
+
+Version 1.18 (win): 2016-09-28
+
+On windows the movements were "stalled" between each server step. I.e. the
+client would not update the screen before getting the next message from the
+server, leading to a "laggy" experience. This commit fixes that. Also added
+code to github.
