@@ -17,7 +17,7 @@
  *
  */
 
-#define VERSION "1.17 (win32)"
+#define VERSION "1.18 (Win)"
 
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT	0x0500
