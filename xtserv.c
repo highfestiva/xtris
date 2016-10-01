@@ -18,6 +18,8 @@
  
 #pragma comment(lib, "Ws2_32.lib")
 
+#define _WIN32_WINNT	0x0600	// Vista+ for inet_ntop.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -25,6 +27,7 @@
 #include <time.h>
 #include <signal.h>
 #include <winsock2.h>
+#include <Ws2tcpip.h>
 #include <errno.h>
 #include <string.h>
 #include <process.h>
@@ -100,7 +103,7 @@ struct user *user0 = NULL;
 #define NEXT(u) ((u)->next ? (u)->next : user0)
 
 int port = DEFAULTPORT;
-struct sockaddr_in saddr;
+struct sockaddr_in6 saddr;
 int lfd;
 unsigned char realbuf[512], *buf = realbuf + 4;
 
@@ -253,6 +256,7 @@ void new_connect(int fd) {
   u = malloc(sizeof (struct user));
   if (!u)
     fatal("Out of memory");
+  memset(u, 0, sizeof(struct user));
   u->fd = fd;
   u->nick[0] = 0;
   u->next = user0;
@@ -277,8 +281,11 @@ again:
     v = v->next;
   }
   u->number = nxn;
-  if (verbose)
-    printf("client %d connecting from %s\n", nxn, inet_ntoa(saddr.sin_addr));
+  if (verbose) {
+    char addr[256];
+	inet_ntop(AF_INET6, &saddr, addr, sizeof(addr));
+    printf("client %d connecting from %s\n", nxn, addr);
+  }
   clients++;
   buf[1] = OP_YOUARE;
   buf[0] = u->number;
@@ -362,10 +369,14 @@ int main(int argc, char *argv[]) {
     fatal("Socket Initialization Error. Program aborted");
   }
 
-  lfd = socket(PF_INET, SOCK_STREAM, 0);
-  saddr.sin_family = AF_INET;
-  saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  saddr.sin_port = htons(port);
+  lfd = socket(AF_INET6, SOCK_STREAM, 0);
+  // Allow IPv4 as well.
+  int no = 0;
+  setsockopt(lfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&no, sizeof(no));
+  memset(&saddr, 0, sizeof(saddr));
+  saddr.sin6_family = AF_INET6;
+  saddr.sin6_addr = in6addr_any;
+  saddr.sin6_port = htons(port);
 
   if (lfd < 0)
     syserr("socket");

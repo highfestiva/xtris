@@ -24,6 +24,7 @@
 *   comments in decide.c, xtbot.h and decide.h for more information.
 */
 
+#define _WIN32_WINNT	0x0600	// Vista+ for inet_pton.
 #pragma comment(lib, "Ws2_32.lib")
 
 #include <stdio.h>
@@ -33,6 +34,7 @@
 #include <time.h>
 #include "systime.h"
 #include <winsock2.h>
+#include <Ws2tcpip.h>
 #include <errno.h>
 #include <process.h>
 #include "xtbot.h"
@@ -638,33 +640,50 @@ static void doserverstuff() {
 static void connect2server(char *h) {
 	WSADATA wsaData;
 	struct hostent *hp;
-	struct sockaddr_in s;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
+	struct sockaddr* s;
+	int addr_size;
 	struct protoent *tcpproto;
 	int on = 1;
 
-	if (h) {
-		if ((s.sin_addr.s_addr = inet_addr(h)) == INADDR_NONE) {
-			hp = gethostbyname(h);
-			if (!hp)
-				fatal("Host not found");
-			s.sin_addr = *(struct in_addr *)(hp->h_addr_list[0]);
-		}
-	}
-	else s.sin_addr.s_addr = inet_addr("127.0.0.1");
-	s.sin_port = htons(port);
-	s.sin_family = AF_INET;
-
-	if(WSAStartup(MAKEWORD(2,0),&wsaData) != 0) {
+	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
 		fatal("Socket Initialization Error. Program aborted");
 	}
 
-	sfd = socket(AF_INET, SOCK_STREAM, 0);
+	s = &s4;
+	addr_size = sizeof(s4);
+	memset(&s4, 0, sizeof(s4));
+	s4.sin_family = AF_INET;
+	s4.sin_port = htons(port);
+	memset(&s6, 0, sizeof(s6));
+	s6.sin6_family = AF_INET6;
+	s6.sin6_port = htons(port);
+	if (h) {
+		if ((s4.sin_addr.s_addr = inet_addr(h)) == INADDR_NONE) {
+			s = &s6;
+			addr_size = sizeof(s6);
+			if (inet_pton(AF_INET6, h, &s6.sin6_addr) != 1) {
+				s = &s4;
+				addr_size = sizeof(s4);
+				hp = gethostbyname(h);
+				if (!hp)
+					fatal("Host not found");
+				s4.sin_addr = *(struct in_addr *)(hp->h_addr_list[0]);
+			}
+		}
+	}
+	else {
+		s4.sin_addr.s_addr = inet_addr("127.0.0.1");
+	}
+
+	sfd = socket(s->sa_family, SOCK_STREAM, 0);
 	if (sfd == INVALID_SOCKET)
 		fatal("Out of file descriptors");
 	if ((tcpproto = getprotobyname("tcp")) != NULL)
 		setsockopt(sfd, tcpproto->p_proto, TCP_NODELAY, (char *)&on, sizeof(int));
 
-	if (connect(sfd, (struct sockaddr *)&s, sizeof(s)) < 0)
+	if (connect(sfd, s, addr_size) < 0)
 		fatal("Can't connect to server");
 
 	buf[1] = OP_NICK;

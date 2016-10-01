@@ -1,12 +1,12 @@
-# xtris -- a multi-player version of Tetris for the X Window system
+# xtris -- multi-player *tris ported to Windows.
 
 			
 Roger Espel Llima <roger.espel.llima@pobox.com>
-(ported to win32 by Vedran Vidovic <vvidovic@inet.hr>)
-("Offline movements" by Jonas Byström <highfestiva@gmail.com> 2016.)
+(ported to win32 by Vedran Vidovic <vvidovic@inet.hr>, 
+"intermittent movements" and IPv6 by Jonas Byström <highfestiva@gmail.com> 2016)
 
 xtris is a version of the classical game of Tetris, for any number of
-players, for the X Window system.
+players, for the X Window system. This is a Windows port.
 
 xtris is a true client/server game (as opposed to a centralized game
 managing multiple displays), which makes it particularily responsive and

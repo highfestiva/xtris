@@ -1,0 +1,7 @@
+.vs/
+Debug/
+Release/
+*.ilk
+*.db
+*.opendb
+*.user

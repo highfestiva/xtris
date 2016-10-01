@@ -19,13 +19,12 @@
 
 #define VERSION "1.18 (Win)"
 
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT	0x0500
-#endif // _WIN32_WINNT
+#define _WIN32_WINNT	0x0600	// Vista+ for inet_pton.
 #pragma comment(lib, "Ws2_32.lib")
 
 #include <WinSock2.h>
 #include <Windows.h>
+#include <Ws2tcpip.h>
 #include <stdio.h>
 #include <process.h>
 #include "systime.h"
@@ -130,7 +129,7 @@ int bw = 0;
 int funmode = 0;
 int flashy = 0;
 int standalone = 0;
-int sqrsize = 16;
+int sqrsize = 24;
 int hscroll = 10;
 int paused = 0;
 int visiblemsgs = 0, msgsclosed = 0;
@@ -2162,6 +2161,7 @@ void handlemessages(void) {
 				}
 			}
 			v->next = u = mmalloc(sizeof(struct user));
+			memset(u, 0, sizeof(struct user));
 			u->number = buf[0];
 			u->games = (len >= 4 ? buf[2] * 256 + buf[3] : 0);
 			u->nick[0] = 0;
@@ -2499,47 +2499,62 @@ void startserver(void) {
 void connect2server(char *h) {
 	WSADATA wsaData;
 	struct hostent *hp;
-	struct sockaddr_in s;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
+	struct sockaddr* s;
+	int addr_size;
 	struct protoent *tcpproto;
 	int on = 1, i;
 	unsigned long localhostAddr = inet_addr("127.0.0.1");
 
-	if (h) {
-		if ((s.sin_addr.s_addr = inet_addr(h)) == INADDR_NONE) {
-			hp = gethostbyname(h);
-			if (!hp)
-				fatal("Host not found");
-			s.sin_addr = *(struct in_addr *)(hp->h_addr_list[0]);
-		}
-	}
-	else {
-		s.sin_addr.s_addr = localhostAddr;
-	}
-	s.sin_port = htons(port);
-	s.sin_family = AF_INET;
-
-	if(WSAStartup(MAKEWORD(2,0),&wsaData) != 0) {
+	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
 		fatal("Socket Initialization Error. Program aborted");
 	}
 
-	sfd = socket(AF_INET, SOCK_STREAM, 0);
+	s = &s4;
+	addr_size = sizeof(s4);
+	memset(&s4, 0, sizeof(s4));
+	s4.sin_family = AF_INET;
+	s4.sin_port = htons(port);
+	memset(&s6, 0, sizeof(s6));
+	s6.sin6_family = AF_INET6;
+	s6.sin6_port = htons(port);
+	if (h) {
+		if ((s4.sin_addr.s_addr = inet_addr(h)) == INADDR_NONE) {
+			s = &s6;
+			addr_size = sizeof(s6);
+			if (inet_pton(AF_INET6, h, &s6.sin6_addr) != 1) {
+				s = &s4;
+				addr_size = sizeof(s4);
+				hp = gethostbyname(h);
+				if (!hp)
+					fatal("Host not found");
+				s4.sin_addr = *(struct in_addr *)(hp->h_addr_list[0]);
+			}
+		}
+	}
+	else {
+		s4.sin_addr.s_addr = localhostAddr;
+	}
+
+	sfd = socket(s->sa_family, SOCK_STREAM, 0);
 	if (sfd == INVALID_SOCKET)
 		fatal("Out of file descriptors");
 	if ((tcpproto = getprotobyname("tcp")) != NULL)
 		setsockopt(sfd, tcpproto->p_proto, TCP_NODELAY, (char *)&on, sizeof(int));
 
-	if (connect(sfd, (struct sockaddr *)&s, sizeof(s)) < 0) {
-		if (!h || s.sin_addr.s_addr == localhostAddr) {
+	if (connect(sfd, s, addr_size) < 0) {
+		if (!h || s4.sin_addr.s_addr == localhostAddr) {
 			printf("No xtris server on localhost - starting up one ...\n");
 			startserver();
 			for (i=0; i<6; i++) {
 				u_sleep(500000);
 				closesocket(sfd);
-				sfd = socket(PF_INET, SOCK_STREAM, 0);
+				sfd = socket(s->sa_family, SOCK_STREAM, 0);
 				if (sfd == INVALID_SOCKET)
 					fatal("Out of file descriptors");
 				setsockopt(sfd, tcpproto->p_proto, TCP_NODELAY, (char *)&on, sizeof(int));
-				if (connect(sfd, (struct sockaddr *)&s, sizeof(s)) >= 0)
+				if (connect(sfd, s, addr_size) >= 0)
 					break;
 			}
 			if (i==6)
@@ -2585,7 +2600,7 @@ int main(int argc, char *argv[]) {
 			exit(0);
 		}
 		else if (strcmp(argv[1], "-big") == 0) {
-			sqrsize = 20;
+			sqrsize = 32;
 			argv++;
 			argc--;
 		}
